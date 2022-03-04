@@ -152,7 +152,8 @@ class Subsample(object):
                 print(f'WARNING: {read.path} has {read.n_reads} reads and sub-sampling at '
                       f'{depth}X depth would require {self.n_subsampled_reads} reads', file=sys.stderr)
             else:
-                self.path = subsample_reads(read.path, f'{out_dir}/{self.depth_string}', self.n_subsampled_reads)
+                self.path = subsample_reads(read.path, f'{out_dir}/{self.depth_string}',
+                                            self.n_subsampled_reads, read.gzipped)
 
     def __repr__(self):
         return self.depth_string
