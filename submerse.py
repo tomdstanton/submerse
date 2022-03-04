@@ -103,7 +103,7 @@ class Sample(object):
         self.coverage = 0
 
     def get_output_string(self):
-        return f'{self.sample_name}\t{self.assembly}\t' \
+        return f'{self.sample_name}\t{path.basename(self.assembly)}\t' \
                f'{self.genome_size}\t{self.total_reads}\t' \
                f'{self.ave_insert_size}\t{self.coverage}'
 
@@ -133,7 +133,7 @@ class ReadFile(object):
         self.subsamples = []
 
     def get_output_string(self):
-        output_string = f'{self.path}\t{self.insert_size}\t{self.n_reads}'
+        output_string = f'{path.basename(self.path)}\t{self.insert_size}\t{self.n_reads}'
         for s in self.subsamples:
             output_string += f'\t{s.n_subsampled_reads}'
         return output_string
