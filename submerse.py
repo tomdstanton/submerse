@@ -103,7 +103,7 @@ class Sample(object):
     def get_output_string(self):
         return f'{self.sample_name}\t{self.assembly}\t' \
                f'{self.genome_size}\t{self.total_reads}\t' \
-               f'{self.ave_insert_size}\t{self.coverage}\t'
+               f'{self.ave_insert_size}\t{self.coverage}'
 
     # We perform all the I/O operations here so we can do it concurrently
     def calculate_coverage(self, subsample_depths, out_dir):
