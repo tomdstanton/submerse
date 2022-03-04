@@ -98,9 +98,6 @@ class Sample(object):
         self.ave_insert_size = 0
         self.coverage = 0
 
-    def __repr__(self):
-        return self.sample_name
-
     def get_output_string(self):
         return f'{self.sample_name}\t{self.assembly}\t' \
                f'{self.genome_size}\t{self.total_reads}\t' \
@@ -124,9 +121,6 @@ class ReadFile(object):
         self.gzipped = True if extention.endswith('.gz') else False
         self.n_reads, self.insert_size = get_reads_and_insert(self.path, self.gzipped)
         self.subsamples = []
-
-    def __repr__(self):
-        return self.path
 
     def get_output_string(self):
         output_string = f'{self.path}\t{self.insert_size}\t{self.n_reads}'
