@@ -2,9 +2,15 @@
 ###### Calculate genome depth and randomly sub-sample reads
 
 
-_By Tom Stanton_ (he/him) :scientist: 
-[email me!](mailto:tomdstanton@gmail.com?subject=[submerse]) \
-[![alt text][1.1]][1] [![alt text][6.1]][6]
+_By Tom Stanton_ (he/him)
+
+
+[![LindIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://uk.linkedin.com/in/tom-stanton-676556100)
+[![Holtlab](https://img.shields.io/badge/-Holt%20Lab-black?style=for-the-badge&logo=square&logoColor=white)](https://holtlab.net)
+[![Twitter](https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/tomstantonmicro)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 
 ---
 ### About
@@ -85,7 +91,9 @@ Eric S. Lander, Michael S. Waterman (1988).
 Genomic mapping by fingerprinting random clones: A mathematical analysis.
 Genomics, 2, 3, 4 1988
 
-[1]: http://twitter.com/tomstantonmicro
-[1.1]: http://i.imgur.com/tXSoThF.png (twitter icon with padding)
-[6]: http://www.github.com/tomdstanton
-[6.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
+[2]: http://twitter.com/tomstantonmicro
+[2.1]: http://i.imgur.com/tXSoThF.png (twitter icon with padding)
+[3]: http://www.github.com/tomdstanton
+[3.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
+[4]: mailto:tomdstanton@gmail.com?subject=[submerse]
+[4.1]: https://i.imgur.com/vltiL8c.png

@@ -162,6 +162,7 @@ if __name__ == "__main__":
     if args.out and not args.seed:
         quit_with_error('Can only randomly sub-sample reads with a random seed, try --seed 100')
 
+    args.threads = min(args.threads, cpu_count())
     seed(args.seed)
     samples = process_reads(args.reads, args.assemblies)
     header = f'Sample\tAssembly_file\tBases\tTotal_reads\tAverage_insert_size\tDepth\tRead_file\tInsert_size\t'\
