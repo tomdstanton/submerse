@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+
+from random import seed, choices
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import gzip
+import sys
+from os import cpu_count, path, makedirs
+from re import compile, IGNORECASE, search
+from itertools import islice
+from concurrent import futures
+
+__version__ = '0.0.1'
+
+
+def parse_args(args):
+    parser = ArgumentParser(description='submerse', formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='submerse v' + __version__,
+                        help="show version number and exit")
+    parser.add_argument('-a', '--assemblies', nargs='+', type=str, required=True, help='assembly fasta files')
+    parser.add_argument('-r', '--reads', nargs='+', type=str, required=True, help='read fastq files, can be gzipped')
+    parser.add_argument('-s', '--seed', type=int, help='seed for random sub-sampling')
+    parser.add_argument('-d', '--depths', nargs='+', type=int, help='depth(s) to subsample at')
+    parser.add_argument('-o', '--out', type=str, help='output directory for sub-sampled reads')
+    parser.add_argument('-t', '--threads', type=int, default=cpu_count(), help='number of threads')
+    return parser.parse_args(args)
+
+
+def get_reads_and_insert(read_file, gzipped):
+    openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
+    n_line = 0
+    with openfile as f:
+        for line in islice(f, 1, None, 4):
+            n_line += 1
+    openfile.close()
+    return n_line, len(line.decode().strip())
+
+
+def subsample_reads(read_file, out_dir, n_reads):
+    makedirs(out_dir, exist_ok=True)
+    out_file = f'{out_dir}/{path.basename(read_file)}'.removesuffix('.gz')
+    with gzip.open(read_file, 'rt') as f:
+        # Writing data once is faster than writing in pieces,
+        # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
+        open(out_file, 'w').write(
+            '\n'.join(f'@{read}' for read in choices(f.read().split('@'), k=n_reads)))
+    return out_file
+
+
+def process_reads(read_files, assembly_files):
+    for file in assembly_files + read_files:
+        if not path.isfile(file):
+            quit_with_error(f'{file} does not exist')
+
+    samples = []
+    read_regex = compile('|'.join([
+        '_R[12]\.(f(?:ast)?q(?:\.gz)?)$',
+        '_R[12]_[0-9]+?\.(f(?:ast)?q(?:\.gz)?)$',
+        '_R[12].[0-9]+?\.(f(?:ast)?q(?:\.gz)?)$',
+        '_[12]\.(f(?:ast)?q(?:\.gz)?)$',
+        '_[12]_[0-9]+?\.(f(?:ast)?q(?:\.gz)?)$',
+        '_[12].[0-9]+?\.(f(?:ast)?q(?:\.gz)?)$',
+        '\.(f(?:ast)?q(?:\.gz)?)$']), IGNORECASE)
+
+    for file in assembly_files:
+        sample = Sample(path.basename(file).rsplit(".", 1)[0], file)
+        for read_file in read_files:
+            extension_match = search(read_regex, read_file)
+            if extension_match:
+                if path.basename(read_file).replace(extension_match.group(0), '') == sample.sample_name:
+                    sample.reads.append(ReadFile(read_file, extension_match.group(0)))
+        samples.append(sample)
+        if not sample.reads:
+            quit_with_error(f'No read files found for {sample}')
+        elif len(sample.reads) > 2:
+            quit_with_error(f'More than 2 files for {sample}: {" ".join(sample.reads)}')
+    if not samples:
+        quit_with_error('No files to analyse')
+    return samples
+
+
+def quit_with_error(message):
+    print(f'ERROR: {message}', file=sys.stderr)
+    sys.exit(1)
+
+
+def get_genome_size(assembly):
+    with open(assembly, 'rt') as f:  # Can we open in binary mode?
+        return sum([sum([len(x) for x in i.split('\n')[1:]]) for i in f.read().split('>')])
+
+
+class Sample(object):
+    def __init__(self, sample_name, assembly_file):
+        self.sample_name = sample_name
+        self.assembly = assembly_file
+        self.reads = []
+        self.genome_size = get_genome_size(self.assembly)
+        self.total_reads = 0
+        self.ave_insert_size = 0
+        self.coverage = 0
+
+    def __repr__(self):
+        return self.sample_name
+
+    def get_output_string(self):
+        return f'{self.sample_name}\t{self.assembly}\t' \
+               f'{self.genome_size}\t{self.total_reads}\t' \
+               f'{self.ave_insert_size}\t{self.coverage}\t'
+
+    def calculate_coverage(self, subsample_depths, out_dir):
+        self.total_reads += sum([i.n_reads for i in self.reads])
+        self.ave_insert_size += round(sum([i.insert_size for i in self.reads]) / len(self.reads))
+        self.coverage += round((self.total_reads * self.ave_insert_size) / self.genome_size)
+        for read in self.reads:
+            if subsample_depths:
+                for depth in subsample_depths:
+                    read.subsamples.append(Subsample(self.coverage, depth, read, out_dir))
+            print(f'{self.get_output_string()}\t{read.get_output_string()}')
+
+
+class ReadFile(object):
+    def __init__(self, path, extention):
+        self.path = path
+        self.extention = extention
+        self.gzipped = True if extention.endswith('.gz') else False
+        self.n_reads, self.insert_size = get_reads_and_insert(self.path, self.gzipped)
+        self.subsamples = []
+
+    def __repr__(self):
+        return self.path
+
+    def get_output_string(self):
+        output_string = f'{self.path}\t{self.insert_size}\t{self.n_reads}'
+        for s in self.subsamples:
+            #output_string += f'\t{s.n_subsampled_reads}\t{s.path}'
+            output_string += f'\t{s.n_subsampled_reads}'
+        return output_string
+
+
+class Subsample(object):
+    def __init__(self, coverage, depth, read, out_dir):
+        self.depth = depth
+        self.depth_string = f'submerse_{depth}X_subsampled_reads'
+        self.n_subsampled_reads = round((depth / coverage) * read.n_reads)
+        self.path = '-'
+        if out_dir:
+            if read.n_reads <= self.n_subsampled_reads:
+                print(f'WARNING: {read.path} has {read.n_reads} reads and sub-sampling at '
+                      f'{depth}X depth would require {self.n_subsampled_reads} reads', file=sys.stderr)
+            else:
+                self.path = subsample_reads(read.path, f'{out_dir}/{self.depth_string}', self.n_subsampled_reads)
+
+    def __repr__(self):
+        return self.depth_string
+
+
+if __name__ == "__main__":
+    args = parse_args(sys.argv[1:])
+    if args.out and not args.depths:
+        quit_with_error('Can only output sub-sampled reads at selected depths with the --depths option')
+
+    if args.out and not args.seed:
+        quit_with_error('Can only randomly sub-sample reads with a random seed, try --seed 100')
+
+    seed(args.seed)
+    samples = process_reads(args.reads, args.assemblies)
+    header = f'Sample\tAssembly_file\tBases\tTotal_reads\tAverage_insert_size\tDepth\tRead_file\tInsert_size\t'\
+             f'N_reads'
+    if args.depths:
+        header += '\t' + "\t".join([f"N_reads_at_{depth}X_depth" for depth in args.depths])
+    print(header)
+
+    executor = futures.ProcessPoolExecutor(args.threads)
+    ftures = [executor.submit(sample.calculate_coverage(args.depths, args.out)) for sample in samples]
+    futures.wait(ftures)
