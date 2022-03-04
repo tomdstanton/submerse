@@ -22,12 +22,17 @@ genome coverage and subsample reads:
 Additional functionality is the automatic random sub-sampling of reads at 
 chosen depths relative to the calculated depth of the genome.
 
+The depth calculation is based the Lander/Waterman equation, where coverage (C) based on read length (L), 
+number of reads (N), and genome size (G) [1](#1). 
+
 <p align="center">
     <img src="https://render.githubusercontent.com/render/math?math=C = LN / G">
 </p>
 
-The depth calculation is based the Lander/Waterman equation, where coverage (C) based on read length (L), 
-number of reads (N), and genome size (G) [1](#1).
+Read lengths (insert sizes) are determined by calculating the most frequent read length, and
+averaged if there are paired read files. Unfortunately this requires iterating over all
+the reads which increases run time. While this can be sped up with external libraries,
+this program aims to operate from a single script with no dependencies.
 
 ### Usage
 ```commandline
@@ -49,6 +54,14 @@ optional arguments:
   -t THREADS, --threads THREADS
                         number of threads (default: #cpus)
 ```
+- [x] Automatic pairing of read and assembly files
+- [x] Relative, random subsampling
+- [x] Automatic insert size calculation
+- [x] Pure Python, no dependencies, single script
+- [x] No mapping required
+- [ ] Speed optimisation (suggestions welcome!)
+- [ ] Writing gzipped files (too slow)
+
 
 ### Examples
 Calculate genome depth for paired-end reads and pipe to a tab-separated file.

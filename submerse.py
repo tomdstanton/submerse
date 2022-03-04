@@ -26,26 +26,19 @@ def parse_args(arguments):
 
 def get_reads_and_insert(read_file, gzipped):
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
-    n_line = 0
-    size = []
-    with openfile as f:
-        for line in islice(f, 1, None, 4):  # This should iterate over only the fastq seqs which is faster
-            n_line += 1
-            size.append(len(line.strip()))  # Is collecting all seq lengths slower?
-    openfile.close()  # close just in case
-    return n_line, max(set(size), key=size.count)  # Size is the most common insert size
+    sizes = [len(line.strip()) for line in islice(openfile, 1, None, 4)]  # Is collecting all seq lengths slower?
+    openfile.close()
+    return len(sizes), max(set(sizes), key=sizes.count)  # Size is the most common insert size
 
 
 def subsample_reads(read_file, out_dir, n_reads, gzipped):
     makedirs(out_dir, exist_ok=True)
     out_file = f'{out_dir}/{path.basename(read_file)}'.removesuffix('.gz')
     openfile = gzip.open(read_file, 'rt') if gzipped else open(read_file, 'rt')  # Splitting by '@' so open as rt?
-    with openfile as f:
-        # Writing data once is faster than writing in pieces,
-        # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
-        open(out_file, 'w').write(
-            '\n'.join(f'@{read}' for read in choices(f.read().split('@'), k=n_reads)))
-    openfile.close()  # close just in case
+    # Writing data once is faster than writing in pieces,
+    # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
+    open(out_file, 'w').write('\n'.join(f'@{read}' for read in choices(openfile.read().split('@'), k=n_reads)))
+    openfile.close()
     return out_file
 
 
@@ -179,3 +172,4 @@ if __name__ == "__main__":
     executor = futures.ProcessPoolExecutor(args.threads)
     ftures = [executor.submit(sample.calculate_coverage(args.depths, args.out)) for sample in samples]
     futures.wait(ftures)
+    sys.exit(0)
