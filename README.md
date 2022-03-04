@@ -21,7 +21,7 @@ chosen depths relative to the calculated depth of the genome.
 </p>
 
 The depth calculation is based the Lander/Waterman equation, where coverage (C) based on read length (L), 
-number of reads (N), and genome size (G) [[1]](#1).
+number of reads (N), and genome size (G) [1](#1).
 
 ### Usage
 ```commandline
