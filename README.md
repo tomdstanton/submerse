@@ -47,7 +47,7 @@ optional arguments:
                         depth(s) to subsample at (default: None)
   -o OUT, --out OUT     output directory for sub-sampled reads (default: None)
   -t THREADS, --threads THREADS
-                        number of threads (default: 8)
+                        number of threads (default: #cpus)
 ```
 
 ### Examples
