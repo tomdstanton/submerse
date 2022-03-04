@@ -27,11 +27,13 @@ def parse_args(arguments):
 def get_reads_and_insert(read_file, gzipped):
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
     n_line = 0
+    size = []
     with openfile as f:
-        for line in islice(f, 1, None, 4):
+        for line in islice(f, 1, None, 4):  # This should iterate over only the fastq seqs which is faster
             n_line += 1
+            size.append(len(line.strip()))  # Is collecting all seq lengths slower?
     openfile.close()
-    return n_line, len(line.decode().strip())
+    return n_line, max(set(size), key=size.count)  # Size is the most common insert size
 
 
 def subsample_reads(read_file, out_dir, n_reads):
