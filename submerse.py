@@ -12,17 +12,16 @@ from concurrent import futures
 __version__ = '0.0.1'
 
 
-def parse_args(args):
+def parse_args(arguments):
     parser = ArgumentParser(description='submerse', formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='submerse v' + __version__,
-                        help="show version number and exit")
+    parser.add_argument('--version', action='version', version=f'submerse v{__version__}', help="print version and exit")
     parser.add_argument('-a', '--assemblies', nargs='+', type=str, required=True, help='assembly fasta files')
     parser.add_argument('-r', '--reads', nargs='+', type=str, required=True, help='read fastq files, can be gzipped')
     parser.add_argument('-s', '--seed', type=int, help='seed for random sub-sampling')
     parser.add_argument('-d', '--depths', nargs='+', type=int, help='depth(s) to subsample at')
     parser.add_argument('-o', '--out', type=str, help='output directory for sub-sampled reads')
     parser.add_argument('-t', '--threads', type=int, default=cpu_count(), help='number of threads')
-    return parser.parse_args(args)
+    return parser.parse_args(arguments)
 
 
 def get_reads_and_insert(read_file, gzipped):
@@ -68,11 +67,14 @@ def process_reads(read_files, assembly_files):
             if extension_match:
                 if path.basename(read_file).replace(extension_match.group(0), '') == sample.sample_name:
                     sample.reads.append(ReadFile(read_file, extension_match.group(0)))
-        samples.append(sample)
+
         if not sample.reads:
-            quit_with_error(f'No read files found for {sample}')
+            print(f'WARNING: No read files found for {sample}', file=sys.stderr)
         elif len(sample.reads) > 2:
-            quit_with_error(f'More than 2 files for {sample}: {" ".join(sample.reads)}')
+            print(f'WARNING: More than 2 files for {sample}: {" ".join(sample.reads)}', file=sys.stderr)
+        else:
+            samples.append(sample)
+
     if not samples:
         quit_with_error('No files to analyse')
     return samples
@@ -93,7 +95,7 @@ class Sample(object):
         self.sample_name = sample_name
         self.assembly = assembly_file
         self.reads = []
-        self.genome_size = get_genome_size(self.assembly)
+        self.genome_size = 0
         self.total_reads = 0
         self.ave_insert_size = 0
         self.coverage = 0
@@ -103,10 +105,16 @@ class Sample(object):
                f'{self.genome_size}\t{self.total_reads}\t' \
                f'{self.ave_insert_size}\t{self.coverage}\t'
 
+    # We perform all the I/O operations here so we can do it concurrently
     def calculate_coverage(self, subsample_depths, out_dir):
+        self.genome_size = get_genome_size(self.assembly)
+        for read in self.reads:
+            read.n_reads, read.insert_size = get_reads_and_insert(read.path, read.gzipped)
+
         self.total_reads += sum([i.n_reads for i in self.reads])
         self.ave_insert_size += round(sum([i.insert_size for i in self.reads]) / len(self.reads))
         self.coverage += round((self.total_reads * self.ave_insert_size) / self.genome_size)
+
         for read in self.reads:
             if subsample_depths:
                 for depth in subsample_depths:
@@ -119,13 +127,12 @@ class ReadFile(object):
         self.path = path
         self.extention = extention
         self.gzipped = True if extention.endswith('.gz') else False
-        self.n_reads, self.insert_size = get_reads_and_insert(self.path, self.gzipped)
+        self.n_reads, self.insert_size = 0, 0
         self.subsamples = []
 
     def get_output_string(self):
         output_string = f'{self.path}\t{self.insert_size}\t{self.n_reads}'
         for s in self.subsamples:
-            #output_string += f'\t{s.n_subsampled_reads}\t{s.path}'
             output_string += f'\t{s.n_subsampled_reads}'
         return output_string
 

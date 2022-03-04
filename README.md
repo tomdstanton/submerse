@@ -68,6 +68,13 @@ subsampled_reads/submerse_30X_subsampled_reads
 ```
 N.B. The output files will be **uncompressed** due to slow performance in  Python.
 
+Command 2 will produce a table like this:
+
+**Sample**|**Assembly\_file**|**Bases**|**Total\_reads**|**Average\_insert\_size**|**Depth**|   **Read\_file**   |**Insert\_size**|**N\_reads**|**N\_reads\_at\_10X\_depth**|**N\_reads\_at\_20X\_depth**|**N\_reads\_at\_30X\_depth**
+:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:------------------:|:-----:|:-----:|:-----:|:-----:|:-----:
+genome|genome.fasta|5284985|3048096|151|87|genome\_1.fastq.gz|151|1524048|175178|350356|525534
+genome|genome.fasta|5284985|3048096|151|87|genome\_2.fastq.gz|151|1524048|175178|350356|525534
+
 Future updates will improve speed and safety, but I will eventually port this to Rust.
 
 ---
