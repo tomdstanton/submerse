@@ -1,17 +1,12 @@
-# submerse :dna::swimmer::aquarius:
+# submerse :aquarius::dna::aquarius:
 ###### Calculate genome depth and randomly sub-sample reads
 
----
+
 _By Tom Stanton_ (he/him) :scientist: 
 [email me!](mailto:tomdstanton@gmail.com?subject=[submerse]) \
 [![alt text][1.1]][1] [![alt text][6.1]][6]
 
-[1]: http://twitter.com/tomstantonmicro
-[1.1]: http://i.imgur.com/tXSoThF.png (twitter icon with padding)
-[6]: http://www.github.com/tomdstanton
-[6.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
-
-
+---
 ### About
 This tool combines two excellent programs I was previously using to calculate
 genome coverage and subsample reads: 
@@ -27,7 +22,6 @@ chosen depths relative to the calculated depth of the genome.
 
 The depth calculation is based the Lander/Waterman equation, where coverage (C) based on read length (L), 
 number of reads (N), and genome size (G) [[1]](#1).
-
 
 ### Usage
 ```commandline
@@ -49,7 +43,6 @@ optional arguments:
   -t THREADS, --threads THREADS
                         number of threads (default: 8)
 ```
-
 
 ### Examples
 Calculate genome depth for paired-end reads and pipe to a tab-separated file.
@@ -84,3 +77,8 @@ Future updates will improve speed and safety, but I will eventually port this to
 Eric S. Lander, Michael S. Waterman (1988).
 Genomic mapping by fingerprinting random clones: A mathematical analysis.
 Genomics, 2, 3, 4 1988
+
+[1]: http://twitter.com/tomstantonmicro
+[1.1]: http://i.imgur.com/tXSoThF.png (twitter icon with padding)
+[6]: http://www.github.com/tomdstanton
+[6.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
