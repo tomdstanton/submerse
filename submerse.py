@@ -5,7 +5,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import gzip
 import sys
 from os import cpu_count, path, makedirs
-from re import compile, IGNORECASE, search
+from re import compile, IGNORECASE, search, findall
 from itertools import islice
 from concurrent import futures
 
@@ -37,7 +37,9 @@ def subsample_reads(read_file, out_dir, n_reads, gzipped):
     openfile = gzip.open(read_file, 'rt') if gzipped else open(read_file, 'rt')  # Splitting by '@' so open as rt?
     # Writing data once is faster than writing in pieces,
     # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
-    open(out_file, 'w').write(''.join(f'@{read}' for read in choices(openfile.read().split('@'), k=n_reads)))
+    open(out_file, 'w').write(
+        '\n'.join(read for read in choices(findall("\n".join(["[^\n]+"] * 4), openfile.read()), k=n_reads)))
+    # This does assume that the sequence lines are not wrapped and there are 4 lines per read
     openfile.close()
     return out_file
 
