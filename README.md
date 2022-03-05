@@ -93,6 +93,7 @@ Command 2 will produce a table like this:
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
 genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_1.fastq.gz|151|1524048|224428859|175178|350356|525534
 genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_2.fastq.gz|151|1524048|224346098|175178|350356|525534
+
 Future updates will improve speed and safety, but I will eventually port this to Rust.
 
 ---
