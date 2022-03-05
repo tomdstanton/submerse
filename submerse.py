@@ -28,7 +28,7 @@ def get_reads_and_insert(read_file, gzipped):
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
     sizes = [len(line.strip()) for line in islice(openfile, 1, None, 4)]  # Is collecting all seq lengths slower?
     openfile.close()
-    return len(sizes), max(set(sizes), key=sizes.count)  # Size is the most common insert size
+    return len(sizes), max(set(sizes), key=sizes.count), sum(sizes)  # Size is the most common insert size
 
 
 def subsample_reads(read_file, out_dir, n_reads, gzipped):
@@ -37,7 +37,7 @@ def subsample_reads(read_file, out_dir, n_reads, gzipped):
     openfile = gzip.open(read_file, 'rt') if gzipped else open(read_file, 'rt')  # Splitting by '@' so open as rt?
     # Writing data once is faster than writing in pieces,
     # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
-    open(out_file, 'w').write('\n'.join(f'@{read}' for read in choices(openfile.read().split('@'), k=n_reads)))
+    open(out_file, 'w').write(''.join(f'@{read}' for read in choices(openfile.read().split('@'), k=n_reads)))
     openfile.close()
     return out_file
 
@@ -94,21 +94,23 @@ class Sample(object):
         self.reads = []
         self.genome_size = 0
         self.total_reads = 0
+        self.total_bases = 0
         self.ave_insert_size = 0
         self.coverage = 0
 
     def get_output_string(self):
         return f'{self.sample_name}\t{path.basename(self.assembly)}\t' \
-               f'{self.genome_size}\t{self.total_reads}\t' \
+               f'{self.genome_size}\t{self.total_reads}\t{self.total_bases}\t' \
                f'{self.ave_insert_size}\t{self.coverage}'
 
     # We perform all the I/O operations here so we can do it concurrently
     def calculate_coverage(self, subsample_depths, out_dir):
         self.genome_size = get_genome_size(self.assembly)
         for read in self.reads:
-            read.n_reads, read.insert_size = get_reads_and_insert(read.path, read.gzipped)
+            read.n_reads, read.insert_size, read.n_bases = get_reads_and_insert(read.path, read.gzipped)
 
         self.total_reads += sum([i.n_reads for i in self.reads])
+        self.total_bases += sum([i.n_bases for i in self.reads])
         self.ave_insert_size += round(sum([i.insert_size for i in self.reads]) / len(self.reads))
         self.coverage += round((self.total_reads * self.ave_insert_size) / self.genome_size)
 
@@ -124,11 +126,11 @@ class ReadFile(object):
         self.path = path
         self.extention = extention
         self.gzipped = True if extention.endswith('.gz') else False
-        self.n_reads, self.insert_size = 0, 0
+        self.n_reads, self.insert_size, self.n_bases = 0, 0, 0
         self.subsamples = []
 
     def get_output_string(self):
-        output_string = f'{path.basename(self.path)}\t{self.insert_size}\t{self.n_reads}'
+        output_string = f'{path.basename(self.path)}\t{self.insert_size}\t{self.n_reads}\t{self.n_bases}'
         for s in self.subsamples:
             output_string += f'\t{s.n_subsampled_reads}'
         return output_string
@@ -148,9 +150,6 @@ class Subsample(object):
                 self.path = subsample_reads(read.path, f'{out_dir}/{self.depth_string}',
                                             self.n_subsampled_reads, read.gzipped)
 
-    def __repr__(self):
-        return self.depth_string
-
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
@@ -163,8 +162,8 @@ if __name__ == "__main__":
     args.threads = min(args.threads, cpu_count())
     seed(args.seed)
     samples = process_reads(args.reads, args.assemblies)
-    header = f'Sample\tAssembly_file\tBases\tTotal_reads\tAverage_insert_size\tDepth\tRead_file\tInsert_size\t'\
-             f'N_reads'
+    header = f'Sample\tAssembly_file\tGenome_size\tTotal_reads\tTotal_bases\tAverage_insert_size\tDepth\tRead_file\t' \
+             f'Insert_size\tN_reads\tN_bases'
     if args.depths:
         header += '\t' + "\t".join([f"N_reads_at_{depth}X_depth" for depth in args.depths])
     print(header)
