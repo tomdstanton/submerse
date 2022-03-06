@@ -22,8 +22,10 @@ genome coverage and subsample reads:
 Additional functionality is the automatic random sub-sampling of reads at 
 chosen depths relative to the calculated depth of the genome.
 
-The depth calculation is based the Lander/Waterman equation, where coverage (C) based on read length (L), 
-number of reads (N), and genome size (G) [1](#1). 
+Depth/coverage (C) is calculated based the Lander/Waterman equation, where 
+__read length (insert size) = L__, 
+__number of reads = N__, 
+and __genome size = G__<sup>[1](#1)</sup>. 
 
 <p align="center">
     <img src="https://render.githubusercontent.com/render/math?math=C = LN / G">
@@ -33,6 +35,10 @@ Read lengths (insert sizes) are determined by calculating the most frequent read
 averaged if there are paired read files. Unfortunately this requires iterating over all
 the reads which increases run time. While this can be sped up with external libraries,
 this program aims to operate from a single script with no dependencies.
+
+### Dependencies and installation
+* Python >= 3.9.
+* No installation required, just clone the script and run!
 
 ### Usage
 ```commandline
@@ -57,10 +63,10 @@ optional arguments:
 - [x] Automatic pairing of read and assembly files
 - [x] Relative, random subsampling
 - [x] Automatic insert size calculation
-- [x] Pure Python, no dependencies, single script
+- [x] Base Python, no dependencies, single script
 - [x] No mapping required
 - [ ] Speed optimisation (suggestions welcome!)
-- [ ] Writing gzipped files (too slow)
+- [ ] Writing gzipped sub-sampled reads (slow performance)
 
 
 ### Examples
@@ -85,8 +91,8 @@ subsampled_reads/submerse_10X_subsampled_reads
 subsampled_reads/submerse_20X_subsampled_reads
 subsampled_reads/submerse_30X_subsampled_reads
 ```
-N.B. The output files will be **uncompressed** due to slow performance in  Python.
 
+### Output table
 Command 2 will produce a table like this:
 
 **Sample**|**Assembly\_file**|**Genome\_size**|**Total\_reads**|**Total\_bases**|**Average\_insert\_size**|**Depth**|**Read\_file**|**Insert\_size**|**N\_reads**|**N\_bases**|**N\_reads\_at\_10X\_depth**|**N\_reads\_at\_20X\_depth**|**N\_reads\_at\_30X\_depth**
@@ -100,9 +106,9 @@ Future updates will improve speed and safety, but I will eventually port this to
 
 ### References
 <a id="1">[1]</a>
-Eric S. Lander, Michael S. Waterman (1988).
+Eric S. Lander, Michael S. Waterman.
 Genomic mapping by fingerprinting random clones: A mathematical analysis.
-Genomics, 2, 3, 4 1988
+Genomics, 2-4, 1988
 
 [2]: http://twitter.com/tomstantonmicro
 [2.1]: http://i.imgur.com/tXSoThF.png (twitter icon with padding)
