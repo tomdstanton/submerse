@@ -26,19 +26,20 @@ def parse_args(arguments):
 
 def get_reads_and_insert(read_file, gzipped):
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
-    sizes = [len(line.strip()) for line in islice(openfile, 1, None, 4)]  # Is collecting all seq lengths slower?
+    # Size is the most common insert size, however this is slower as requires collection of all seq lengths
+    sizes = [len(line)-1 for line in islice(openfile, 1, None, 4)]
     openfile.close()
-    return len(sizes), max(set(sizes), key=sizes.count), sum(sizes)  # Size is the most common insert size
+    return len(sizes), max(set(sizes), key=sizes.count), sum(sizes)
 
 
 def subsample_reads(read_file, out_dir, n_reads, gzipped):
     makedirs(out_dir, exist_ok=True)
     out_file = f'{out_dir}/{path.basename(read_file)}'.removesuffix('.gz')
-    openfile = gzip.open(read_file, 'rt') if gzipped else open(read_file, 'rt')  # Splitting by '@' so open as rt?
+    openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')  # Splitting by '@' doesn't work
     # Writing data once is faster than writing in pieces,
     # so generate sub-sampled reads in list comprehension then write the resulting joined chunk
-    open(out_file, 'w').write(
-        '\n'.join(read for read in choices(findall("\n".join(["[^\n]+"] * 4), openfile.read()), k=n_reads)))
+    open(out_file, 'wb').write(
+        b'\n'.join(read for read in choices(findall(b"\n".join([b"[^\n]+"] * 4), openfile.read()), k=n_reads)))
     # This does assume that the sequence lines are not wrapped and there are 4 lines per read
     openfile.close()
     return out_file
