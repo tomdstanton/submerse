@@ -14,7 +14,7 @@ _By Tom Stanton_ (he/him)
 
 ---
 ### About
-This tool combines two excellent programs I was previously using to calculate
+This tool is basically an amalgamation two excellent programs I was previously using to calculate
 genome coverage and subsample reads: 
 [fastq-info](https://github.com/raymondkiu/fastq-info) and 
 [seqtk sample](https://github.com/lh3/seqtk).
