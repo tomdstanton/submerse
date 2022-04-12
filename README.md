@@ -41,24 +41,41 @@ this program aims to operate from a single script with no dependencies.
 * No installation required, just clone the script and run!
 
 ### Usage
+• Give `submerse` an assembly fasta and read fastq to calculate depth of each read file. If there is more than one
+read file for the assembly (paired-end or hybrid) it will average these values. 
+
+• You then have the option to randomly subsample at various depths based on the relative average 
+depth `submerse` calculates.
+
+• `submerse` will try to match reads and assemblies based on the _name_ of the file 
+(minus the path and extensions). You can override this behavour and match assembly files to read files in the **order** in
+which they were given to the arguments using the `--force` option.
 ```commandline
-usage: submerse.py [-h] [--version] -a ASSEMBLIES [ASSEMBLIES ...] -r READS [READS ...] [-s SEED] [-d DEPTHS [DEPTHS ...]] [-o OUT] [-t THREADS]
+usage: submerse.py [-h] [--version] -a ASSEMBLY [ASSEMBLY ...] [-1 FORWARD [FORWARD ...]] [-2 REVERSE [REVERSE ...]] [-s SINGLE [SINGLE ...]] [-r RANDOM_SEED] [-d DEPTHS [DEPTHS ...]] [-o OUT] [-t THREADS] [-f] [-v] [-vv]
 
 submerse
 
 optional arguments:
   -h, --help            show this help message and exit
-  --version             show version number and exit
-  -a ASSEMBLIES [ASSEMBLIES ...], --assemblies ASSEMBLIES [ASSEMBLIES ...]
-                        assembly fasta files (default: None)
-  -r READS [READS ...], --reads READS [READS ...]
-                        read fastq files, can be gzipped (default: None)
-  -s SEED, --seed SEED  seed for random sub-sampling (default: None)
+  --version             print version and exit
+  -a ASSEMBLY [ASSEMBLY ...], --assembly ASSEMBLY [ASSEMBLY ...]
+                        assembly fasta (default: None)
+  -1 FORWARD [FORWARD ...], --forward FORWARD [FORWARD ...]
+                        forward fastq(.gz) (default: None)
+  -2 REVERSE [REVERSE ...], --reverse REVERSE [REVERSE ...]
+                        reverse fastq(.gz) (default: None)
+  -s SINGLE [SINGLE ...], --single SINGLE [SINGLE ...]
+                        non-paired fastq(.gz); use for long-reads, combine with -1 -2 for hybrid assembly (default: None)
+  -r RANDOM_SEED, --random-seed RANDOM_SEED
+                        random integer seed for sub-sampling, e.g. 10 (default: None)
   -d DEPTHS [DEPTHS ...], --depths DEPTHS [DEPTHS ...]
                         depth(s) to subsample at (default: None)
   -o OUT, --out OUT     output directory for sub-sampled reads (default: None)
   -t THREADS, --threads THREADS
-                        number of threads (default: #cpus)
+                        number of threads (default: 8)
+  -f, --force           force given file order (default: False)
+  -v, --verbose         verbose statements to stderr (default: None)
+  -vv, --extra_verbose  debug statements to stderr (default: 30)
 ```
 - [x] Automatic pairing of read and assembly files
 - [x] Relative, random subsampling
@@ -68,38 +85,42 @@ optional arguments:
 - [ ] Speed optimisation (suggestions welcome!)
 - [ ] Writing gzipped sub-sampled reads (slow performance)
 
-
-### Examples
-Calculate genome depth for paired-end reads and pipe to a tab-separated file.
-```commandline
-./submerse.py -a assemblies/*.fasta -r reads/*_{1,2}.fastq.gz >> genome_depths.txt
-```
-Same as above, but calculate N reads for ```10x```, ```20x```, and ```30x``` depth.
-```commandline
-./submerse.py -a assemblies/*.fasta -r reads/*_{1,2}.fastq.gz -d 10 20 30 >> genome_depths.txt
-```
-Same as above, but randomly subsample the reads to ```subsampled_reads/``` using a random seed of ```100```.
-```commandline
-./submerse.py -a assemblies/*.fasta -r reads/*_{1,2}.fastq.gz -d 10 20 30 -o subsampled_reads -s 100
-```
-This will generate a directory tree like this, where the sub-sampled reads have the **same file
-name** as the original read file:
-
-```
-ls subsampled_reads/
-subsampled_reads/submerse_10X_subsampled_reads
-subsampled_reads/submerse_20X_subsampled_reads
-subsampled_reads/submerse_30X_subsampled_reads
-```
-
 ### Output table
-Command 2 will produce a table like this:
+Regardless of whether you are sub-sambling reads or just calculating genome covergae stats, the stdout will 
+print a table like this, where each line corresponds to each read file provided:
 
 **Sample**|**Assembly\_file**|**Genome\_size**|**Total\_reads**|**Total\_bases**|**Average\_insert\_size**|**Depth**|**Read\_file**|**Insert\_size**|**N\_reads**|**N\_bases**|**N\_reads\_at\_10X\_depth**|**N\_reads\_at\_20X\_depth**|**N\_reads\_at\_30X\_depth**
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
 genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_1.fastq.gz|151|1524048|224428859|175178|350356|525534
 genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_2.fastq.gz|151|1524048|224346098|175178|350356|525534
 
+### Examples
+Calculate genome depth for paired-end reads and pipe to a tab-separated file.
+```commandline
+./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz >> genome_depths.txt
+```
+Same as above, but calculate N reads for ```10x```, ```20x```, and ```30x``` depth.
+```commandline
+./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz -d 10 20 30 >> genome_depths.txt
+```
+Same as above, but randomly subsample the reads to ```subsampled_reads/``` using a random seed of ```100```.
+```commandline
+./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz -d 10 20 30 -o . -s 100 >> genome_depths.txt
+```
+This will generate a directory tree like this, where the sub-sampled reads have the **same file
+name** as the original read file:
+
+```
+submerse_10X_subsampled_reads/read_1.fastq
+submerse_10X_subsampled_reads/read_2.fastq
+submerse_20X_subsampled_reads/read_1.fastq
+submerse_20X_subsampled_reads/read_2.fastq
+submerse_30X_subsampled_reads/read_1.fastq
+submerse_30X_subsampled_reads/read_2.fastq
+```
+
+
+### Future plans
 Future updates will improve speed and safety, but I will eventually port this to Rust.
 
 ---
