@@ -21,10 +21,11 @@ import logging
 from os import cpu_count, path, makedirs
 from re import compile, IGNORECASE, search, findall
 from itertools import islice
-from concurrent import futures
+from time import time
+
 
 # ............... Attributes ............... #
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 __author__ = "Tom Stanton"
 __maintainer__ = "Tom Stanton"
 __email__ = "tomdstanton@gmail.com"
@@ -47,10 +48,12 @@ read_regex = compile('|'.join([
 logger = logging.getLogger(__name__)  # https://stackoverflow.com/a/45065655/10771025
 
 
-# ............... Functions ............... #
+# ............... Main Program ............... #
 def main():
     args = parse_args(sys.argv[1:])
-    # args = parse_args("-a /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002.fasta -1 /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002_1.fastq.gz -2 /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002_2.fastq.gz -f".split())
+    # args = parse_args("-a /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002.fasta
+    # -1 /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002_1.fastq.gz
+    # -2 /Users/tom/Bioinformatics/submerse/R-AJ101A_S62_L002_2.fastq.gz -f".split())
 
     if not any([args.forward, args.reverse, args.single]):
         quit_with_error('No fastq files provided')
@@ -60,38 +63,41 @@ def main():
                         'same as the number of assemblies')
 
     if args.out and not args.depths:
-        quit_with_error('Can only output sub-sampled reads at selected depths with the --depths option')
+        quit_with_error('Can only output sub-sampled reads at selected depths with the -d option')
 
-    if args.out and not args.seed:
-        quit_with_error('Can only randomly sub-sample reads with a random seed, try --seed 100')
+    if args.out and not args.random_seed:
+        quit_with_error('Can only randomly sub-sample reads with a random seed, try -r 100')
 
-    args.threads = min(args.threads, cpu_count())
-    seed(args.random_seed)
+    seed(args.random_seed)  # Set random seed using the args
 
     line_width = 70  # Nice general terminal width
-    logging.basicConfig(format="[%(asctime)s::%(levelname)s::%(funcName)s] %(message)s",
+    logging.basicConfig(format="[%(asctime)s %(levelname)s %(funcName)s] %(message)s",
                         datefmt='%H:%M:%S', level=args.loglevel)
-    logger.info(f' {path.basename(__file__)} {__version__} '.center(line_width, '='))
-    logo()  # Logger output logo if verbose
+    logger.info(format_str(f' {path.basename(__file__)} {__version__} '.center(line_width, '='), '36'))
     logger.info(f'Platform: {sys.platform}')
     logger.info(f'Python: {".".join([str(i) for i in sys.version_info[:3]])}')
-    logger.info(f'Using {args.threads} threads')
 
     samples = process_input(args.forward, args.reverse, args.single, args.assembly, args.force)
 
-    header = f'Sample\tAssembly_file\tGenome_size\tTotal_reads\tTotal_bases\tAverage_insert_size\tDepth\tRead_file\t' \
-             f'Insert_size\tN_reads\tN_bases'
+    header = f'Sample\tAssembly_file\tGenome_size\tTotal_reads\tTotal_bases\tAve_mean_read_length\tAve_mode_read_length\t' \
+             f'Total_coverage\tRead_file\tMean_read_length\tMode_read_length\tRead_coverage\tMax_read_length\t' \
+             f'Min_read_length\tN_reads\tN_bases'
     if args.depths:
         header += '\t' + "\t".join([f"N_reads_at_{depth}X_depth" for depth in args.depths])
     print(header)
-    executor = futures.ProcessPoolExecutor(args.threads)
-    ftures = [executor.submit(s.calculate_coverage(args.depths, args.out)) for s in samples]
-    futures.wait(ftures)
+
+    for sample in samples:
+        sample.calculate_coverage(args.depths, args.out, args.equation)
+
+    logger.info(format_str(f' Completed '.center(line_width, '='), '36'))
     sys.exit(0)
 
 
+# ............... Functions ............... #
 def parse_args(arguments):
-    parser = ArgumentParser(description='submerse', formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser(description='submerse', formatter_class=ArgumentDefaultsHelpFormatter,
+                            usage='python submerse.py -a assembly.fasta -1 sr_1.fastq.gz -2 sr_2.fastq.gz '
+                                  '-s lr.fastq.gz -d 10 20 30 -out subsampled_reads -r 678')
     parser.add_argument('--version', action='version', version=f'submerse v{__version__}',
                         help="print version and exit")
     parser.add_argument('-a', '--assembly', nargs='+', type=str, required=True, help='assembly fasta')
@@ -101,8 +107,8 @@ def parse_args(arguments):
                         help='non-paired fastq(.gz); use for long-reads, combine with -1 -2 for hybrid assembly')
     parser.add_argument('-r', '--random-seed', type=int, help='random integer seed for sub-sampling, e.g. 10')
     parser.add_argument('-d', '--depths', nargs='+', type=int, help='depth(s) to subsample at')
+    parser.add_argument('-e', '--equation', type=int, default=1, choices=[1,2,3], help='equation used to calculate coverage')
     parser.add_argument('-o', '--out', type=str, help='output directory for sub-sampled reads')
-    parser.add_argument('-t', '--threads', type=int, default=8, help='number of threads')
     parser.add_argument('-f', '--force', action='store_true', default=False, help='force given file order')
     parser.add_argument('-v', '--verbose', help="verbose statements to stderr",
                         action="store_const", dest="loglevel", const=logging.INFO)
@@ -111,20 +117,23 @@ def parse_args(arguments):
     return parser.parse_args(arguments)
 
 
-def get_reads_and_insert(read_file, gzipped):
+def get_read_sizes(read_file, gzipped):
     # This function opens the fastq-formatted file to count the number of reads and gets the length of every
     # read to calculate the most frequently occurring insert size.
     # It's probably the slowest part of the program, and pure-python optimisations are encouraged.
+    start = time()
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')
     # Size is the most common insert size, however this is slower as requires collection of all seq lengths
     # islice iterates over every 2nd line in steps of 4
     # -1 removes newline char count
     sizes = [len(line) - 1 for line in islice(openfile, 1, None, 4)]
     openfile.close()
-    return len(sizes), max(set(sizes), key=sizes.count), sum(sizes)
+    logger.debug(f"Counted reads and lengths for {read_file} [{time()-start:.2f}s]")
+    return sizes
 
 
 def subsample_reads(read_file, out_dir, n_reads, gzipped):
+    start = time()
     makedirs(out_dir, exist_ok=True)
     out_file = f'{out_dir}/{path.basename(read_file)}'.removesuffix('.gz')
     openfile = gzip.open(read_file, 'rb') if gzipped else open(read_file, 'rb')  # Splitting by '@' doesn't work
@@ -134,12 +143,12 @@ def subsample_reads(read_file, out_dir, n_reads, gzipped):
         b'\n'.join(read for read in choices(findall(b"\n".join([b"[^\n]+"] * 4), openfile.read()), k=n_reads)))
     # This does assume that the sequence lines are not wrapped and there are 4 lines per read
     openfile.close()
+    logger.debug(f"Written sub-sampled reads to {out_file} [{time()-start:.2f}s]")
     return out_file
 
 
 def process_reads(sample, files, read_type, force, order):
     """Assigns read files to an assembly and add to the Sample object"""
-
     for index, file in enumerate(files):
         extension_match = search(read_regex, file)
         if extension_match:
@@ -151,12 +160,10 @@ def process_reads(sample, files, read_type, force, order):
 
 def process_input(forward_files, reverse_files, single_files, assembly_files, force):
     """Processes input files and stores in Sample object"""
-
-    for files in [assembly_files, forward_files, reverse_files, single_files]:
-        if files:
-            for file in files:
-                if not path.isfile(file):
-                    quit_with_error(f'{file} does not exist')
+    for files in [i for i in [assembly_files, forward_files, reverse_files, single_files] if i]:
+        for file in files:
+            if not path.isfile(file):
+                quit_with_error(f'{file} does not exist')
     sample_list = []
 
     for index, file in enumerate(assembly_files):
@@ -169,9 +176,9 @@ def process_input(forward_files, reverse_files, single_files, assembly_files, fo
             process_reads(sample, single_files, 'single', force, index)
 
         if not sample.reads:
-            logger.warning(format_str(f"WARNING: No read files found for {sample}", '93'))
+            logger.warning(format_str(f"WARNING: No read files found for {sample.sample_name}", '93'))
         elif len(sample.reads) > 3:
-            logger.warning(format_str(f"WARNING: More than 3 files for {sample}: {' '.join(sample.reads)}", '93'))
+            logger.warning(format_str(f"WARNING: More than 3 files for {sample.sample_name}: {' '.join(sample.reads)}", '93'))
         else:
             sample_list.append(sample)
 
@@ -187,19 +194,12 @@ def quit_with_error(message):
 
 
 def format_str(string, format_number):
+    """Add colour to string using a format string number"""
     return f"\033[{format_number}m{string}\033[0m"
 
 
-def logo():
-    logger.info(format_str('''███████╗██╗   ██╗██████╗ ███╗   ███╗███████╗██████╗ ███████╗███████╗''', '36'))
-    logger.info(format_str('''██╔════╝██║   ██║██╔══██╗████╗ ████║██╔════╝██╔══██╗██╔════╝██╔════╝''', '36'))
-    logger.info(format_str('''███████╗██║   ██║██████╔╝██╔████╔██║█████╗  ██████╔╝███████╗█████╗  ''', '36'))
-    logger.info(format_str('''╚════██║██║   ██║██╔══██╗██║╚██╔╝██║██╔══╝  ██╔══██╗╚════██║██╔══╝  ''', '36'))
-    logger.info(format_str('''███████║╚██████╔╝██████╔╝██║ ╚═╝ ██║███████╗██║  ██║███████║███████╗''', '36'))
-    logger.info(format_str('''╚══════╝ ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝''', '36'))
-
-
 def get_genome_size(assembly):
+    """Quickly determine genome size from fasta file"""
     with open(assembly, 'rt') as f:  # Can we open in binary mode?
         return sum([sum([len(x) for x in i.split('\n')[1:]]) for i in f.read().split('>')])
 
@@ -210,28 +210,49 @@ class Sample(object):
         self.sample_name = sample_name
         self.assembly = assembly_file
         self.reads = []
-        self.genome_size = 0
-        self.total_reads = 0
-        self.total_bases = 0
-        self.ave_insert_size = 0
-        self.coverage = 0
+        self.genome_size, self.total_reads, self.total_bases, self.ave_mean_read_length, \
+        self.ave_mode_read_length, self.coverage = [0] * 6
         self.assembly_method = ''
 
     def get_output_string(self):
         return f'{self.sample_name}\t{path.basename(self.assembly)}\t' \
                f'{self.genome_size}\t{self.total_reads}\t{self.total_bases}\t' \
-               f'{self.ave_insert_size}\t{self.coverage}'
+               f'{round(self.ave_mean_read_length)}\t{round(self.ave_mode_read_length)}\t{round(self.coverage)}'
 
     # We perform all the I/O operations here so we can do it concurrently
-    def calculate_coverage(self, subsample_depths, out_dir):
+    def calculate_coverage(self, subsample_depths, out_dir, equation=1):
         self.genome_size = get_genome_size(self.assembly)
         for read in self.reads:
-            read.n_reads, read.insert_size, read.n_bases = get_reads_and_insert(read.path, read.gzipped)
+            read_sizes = get_read_sizes(read.path, read.gzipped)
+            start = time()
+            read.n_reads = len(read_sizes)
+            read.n_bases = sum(read_sizes)
+            read.mean_read_length = read.n_bases / read.n_reads
+            read.mode_read_length = max(set(read_sizes), key=read_sizes.count)
+            read.max_read_length = max(read_sizes)
+            read.min_read_length = min(read_sizes)
+            if equation == 1:
+                read.coverage += round(read.n_bases / self.genome_size)
+            elif equation == 2:
+                read.coverage += round((read.n_reads * read.mean_read_length) / self.genome_size)
+            elif equation == 3:
+                read.coverage += round((read.n_reads * read.mode_read_length) / self.genome_size)
+            logger.debug(f"Performed read size stats for {read.path} [{time() - start:.2f}s]")
 
+        start = time()
         self.total_reads += sum([i.n_reads for i in self.reads])
         self.total_bases += sum([i.n_bases for i in self.reads])
-        self.ave_insert_size += round(sum([i.insert_size for i in self.reads]) / len(self.reads))
-        self.coverage += round((self.total_reads * self.ave_insert_size) / self.genome_size)
+        self.ave_mean_read_length += sum([i.mean_read_length for i in self.reads]) / len(self.reads)
+        self.ave_mode_read_length += sum([i.mode_read_length for i in self.reads]) / len(self.reads)
+        
+        if equation == 1:
+            self.coverage += self.total_bases / self.genome_size
+        elif equation == 2:
+            self.coverage += (self.total_reads * self.ave_mean_read_length) / self.genome_size
+        elif equation == 3:
+            self.coverage += (self.total_reads * self.ave_mode_read_length) / self.genome_size
+
+        logger.debug(f"Calculated genome coverage for {self.sample_name} [{time() - start:.2f}s]")
 
         for read in self.reads:
             if subsample_depths:
@@ -241,16 +262,18 @@ class Sample(object):
 
 
 class ReadFile(object):
-    def __init__(self, filepathpath, extension, read_type):
-        self.path = filepathpath
+    def __init__(self, filepath, extension, read_type):
+        self.path = filepath
         self.extension = extension
         self.read_type = read_type
         self.gzipped = True if extension.endswith('.gz') else False
-        self.n_reads, self.insert_size, self.n_bases = 0, 0, 0
+        self.n_reads, self.mean_read_length, self.mode_read_length, self.n_bases, \
+        self.min_read_length, self.coverage, self.max_read_length = [0] * 7
         self.subsamples = []
 
     def get_output_string(self):
-        output_string = f'{path.basename(self.path)}\t{self.insert_size}\t{self.n_reads}\t{self.n_bases}'
+        output_string = f'{path.basename(self.path)}\t{round(self.mean_read_length)}\t{round(self.mode_read_length)}\t{round(self.coverage)}\t' \
+                        f'{round(self.max_read_length)}\t{round(self.min_read_length)}\t{round(self.n_reads)}\t{round(self.n_bases)}'
         for s in self.subsamples:
             output_string += f'\t{s.n_subsampled_reads}'
         return output_string
@@ -272,7 +295,6 @@ class Subsample(object):
                                             self.n_subsampled_reads, read.gzipped)
 
 
-# ............... Main Program ............... #
 if __name__ == "__main__":
     main()
 

@@ -22,19 +22,10 @@ genome coverage and subsample reads:
 Additional functionality is the automatic random sub-sampling of reads at 
 chosen depths relative to the calculated depth of the genome.
 
-Depth/coverage (C) is calculated based the Lander/Waterman equation, where 
-__read length (insert size) = L__, 
-__number of reads = N__, 
-and __genome size = G__<sup>[1](#1)</sup>. 
-
-<p align="center">
-    <img src="https://render.githubusercontent.com/render/math?math=C = LN / G">
-</p>
-
-Read lengths (insert sizes) are determined by calculating the most frequent read length, and
-averaged if there are paired read files. Unfortunately this requires iterating over all
-the reads which increases run time. While this can be sped up with external libraries,
-this program aims to operate from a single script with no dependencies.
+Coverage (C) is calculated based on either one of three equations:
+1. C = N bases / Genome size (from assembly)
+2. C = (N reads * Mean read length) / Genome size (from assembly)
+3. C = (N reads * Mode read length) / Genome size (from assembly)
 
 ### Dependencies and installation
 * Python >= 3.9.
@@ -51,7 +42,7 @@ depth `submerse` calculates.
 (minus the path and extensions). You can override this behavour and match assembly files to read files in the **order** in
 which they were given to the arguments using the `--force` option.
 ```commandline
-usage: submerse.py [-h] [--version] -a ASSEMBLY [ASSEMBLY ...] [-1 FORWARD [FORWARD ...]] [-2 REVERSE [REVERSE ...]] [-s SINGLE [SINGLE ...]] [-r RANDOM_SEED] [-d DEPTHS [DEPTHS ...]] [-o OUT] [-t THREADS] [-f] [-v] [-vv]
+usage: python submerse.py -a assembly.fasta -1 sr_1.fastq.gz -2 sr_2.fastq.gz -s lr.fastq.gz -d 10 20 30 -out subsampled_reads -r 678
 
 submerse
 
@@ -70,42 +61,41 @@ optional arguments:
                         random integer seed for sub-sampling, e.g. 10 (default: None)
   -d DEPTHS [DEPTHS ...], --depths DEPTHS [DEPTHS ...]
                         depth(s) to subsample at (default: None)
+  -e {1,2,3}, --equation {1,2,3}
+                        equation used to calculate coverage (default: 1)
   -o OUT, --out OUT     output directory for sub-sampled reads (default: None)
-  -t THREADS, --threads THREADS
-                        number of threads (default: 8)
   -f, --force           force given file order (default: False)
   -v, --verbose         verbose statements to stderr (default: None)
   -vv, --extra_verbose  debug statements to stderr (default: 30)
 ```
 - [x] Automatic pairing of read and assembly files
 - [x] Relative, random subsampling
-- [x] Automatic insert size calculation
 - [x] Base Python, no dependencies, single script
-- [x] No mapping required
-- [ ] Speed optimisation (suggestions welcome!)
-- [ ] Writing gzipped sub-sampled reads (slow performance)
+- [x] No mapping/alignment required
+- [ ] TODO Speed optimisation + threading (suggestions welcome!)
+- [ ] TODO Writing gzipped sub-sampled reads (slow performance)
 
 ### Output table
 Regardless of whether you are sub-sambling reads or just calculating genome covergae stats, the stdout will 
 print a table like this, where each line corresponds to each read file provided:
 
-**Sample**|**Assembly\_file**|**Genome\_size**|**Total\_reads**|**Total\_bases**|**Average\_insert\_size**|**Depth**|**Read\_file**|**Insert\_size**|**N\_reads**|**N\_bases**|**N\_reads\_at\_10X\_depth**|**N\_reads\_at\_20X\_depth**|**N\_reads\_at\_30X\_depth**
-:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
-genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_1.fastq.gz|151|1524048|224428859|175178|350356|525534
-genome|genome.fasta|5284985|3048096|448774957|151|87|genome\_2.fastq.gz|151|1524048|224346098|175178|350356|525534
+|Sample            |Assembly_file|Genome_size|Total_reads|Total_bases|Ave_mean_read_length|Ave_mode_read_length|Total_coverage|Read_file        |Mean_read_length|Mode_read_length|Read_coverage|Max_read_length|Min_read_length|N_reads|N_bases  |
+|------------------|-------------|-----------|-----------|-----------|--------------------|--------------------|--------------|-----------------|----------------|----------------|-------------|---------------|---------------|-------|---------|
+|genome            |genome.fasta |5284985    |3048096    |448774957  |147                 |151                 |85            |genome_1.fastq.gz|147             |151             |42           |151            |35             |1524048|224428859|
+|genome            |genome.fasta |5284985    |3048096    |448774957  |147                 |151                 |85            |genome_2.fastq.gz|147             |151             |42           |151            |35             |1524048|224346098|
 
 ### Examples
 Calculate genome depth for paired-end reads and pipe to a tab-separated file.
 ```commandline
-./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz >> genome_depths.txt
+./submerse.py -a assembly.fasta -1 sr_1.fastq.gz -2 sr_2.fastq.gz >> genome_depths.txt
 ```
 Same as above, but calculate N reads for ```10x```, ```20x```, and ```30x``` depth.
 ```commandline
-./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz -d 10 20 30 >> genome_depths.txt
+./submerse.py -a assembly.fasta -1 sr_1.fastq.gz -2 sr_2.fastq.gz -d 10 20 30 >> genome_depths.txt
 ```
 Same as above, but randomly subsample the reads to ```subsampled_reads/``` using a random seed of ```100```.
 ```commandline
-./submerse.py -a assemblies/genome.fasta -1 read_1.fastq.gz -2 read_2.fastq.gz -d 10 20 30 -o . -s 100 >> genome_depths.txt
+./submerse.py -a assembly.fasta -1 sr_1.fastq.gz -2 sr_2.fastq.gz -d 10 20 30 -o . -r 100 >> genome_depths.txt
 ```
 This will generate a directory tree like this, where the sub-sampled reads have the **same file
 name** as the original read file:
