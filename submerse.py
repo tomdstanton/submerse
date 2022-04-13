@@ -23,7 +23,7 @@ from os import cpu_count, path, makedirs
 from re import compile, IGNORECASE, search, findall
 from itertools import islice
 from time import time
-from concurrent.futures import ProcessPoolExecutor, wait
+from collections import Counter
 
 # ............... Attributes ............... #
 __version__ = '0.0.3'
@@ -76,6 +76,7 @@ def parse_args(arguments):
 def get_read_sizes(read_file, gzipped):
     # This function opens the fastq-formatted file to count the number of reads and gets the length of every read
     # -1 removes newline char, islice iterates over 2nd line in steps of 4
+    # Maybe try: https://groverj3.github.io/articles/2019-08-22_just-write-your-own-python-parsers-for-fastq-files.html
     start = time()
     if gzipped:
         with gzip.open(read_file, 'rb') as f:
@@ -203,7 +204,7 @@ class ReadFile(object):
         self.n_reads = len(read_sizes)
         self.n_bases = sum(read_sizes)
         self.mean_read_length = self.n_bases / self.n_reads
-        self.mode_read_length = max(set(read_sizes), key=read_sizes.count)
+        self.mode_read_length = Counter(read_sizes).most_common(1)
         self.max_read_length = max(read_sizes)
         self.min_read_length = min(read_sizes)
         if equation == 1:
@@ -281,9 +282,7 @@ if __name__ == "__main__":
         sample.genome_size = get_genome_size(sample.assembly)
         for read in sample.reads:
             read.genome_size = sample.genome_size
-
-        with ProcessPoolExecutor(os.cpu_count()) as executor:
-            [executor.submit(read.count_bases(args.equation)) for read in sample.reads]
+            read.count_bases(args.equation)
 
         sample.total_reads += sum([i.n_reads for i in sample.reads])
         sample.total_bases += sum([i.n_bases for i in sample.reads])
