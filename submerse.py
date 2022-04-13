@@ -23,7 +23,7 @@ from os import cpu_count, path, makedirs
 from re import compile, IGNORECASE, search, findall
 from itertools import islice
 from time import time
-from collections import Counter
+from statistics import mode
 
 # ............... Attributes ............... #
 __version__ = '0.0.3'
@@ -204,15 +204,15 @@ class ReadFile(object):
         self.n_reads = len(read_sizes)
         self.n_bases = sum(read_sizes)
         self.mean_read_length = self.n_bases / self.n_reads
-        self.mode_read_length = Counter(read_sizes).most_common(1)
+        self.mode_read_length = mode(read_sizes)
         self.max_read_length = max(read_sizes)
         self.min_read_length = min(read_sizes)
         if equation == 1:
-            self.coverage += round(self.n_bases / self.genome_size)
+            self.coverage = self.n_bases / self.genome_size
         elif equation == 2:
-            self.coverage += round((self.n_reads * self.mean_read_length) / self.genome_size)
+            self.coverage = (self.n_reads * self.mean_read_length) / self.genome_size
         elif equation == 3:
-            self.coverage += round((self.n_reads * self.mode_read_length) / self.genome_size)
+            self.coverage = (self.n_reads * self.mode_read_length) / self.genome_size
         logger.debug(f"Performed read size stats for {self.path} {format_str(f'[{time()-start:.2f}s]', '94')}")
 
 
