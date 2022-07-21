@@ -1,4 +1,4 @@
-# submerse :aquarius::dna::aquarius:
+# submerse :aquarius::dna:
 ###### Calculate genome depth and randomly sub-sample reads
 
 
